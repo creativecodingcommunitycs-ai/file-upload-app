@@ -130,8 +130,9 @@ app.get("/admin/dashboard", (req, res) => {
 
   const total = submissions.length;
 
-  let rows = submissions.map(r => `
+  let rows = submissions.map((r, i) => `
     <tr>
+      <td>${i + 1}</td>
       <td>${escapeHtml(r.Name)}</td>
       <td>${escapeHtml(r.RollNo)}</td>
       <td>${escapeHtml(r.Batch)}</td>
@@ -187,10 +188,10 @@ app.get("/admin/dashboard", (req, res) => {
       <h3>📂 All Submissions</h3>
       <table>
         <thead>
-          <tr><th>Name</th><th>Roll No</th><th>Batch</th><th>File</th><th>DateTime</th><th>Action</th></tr>
+          <tr><th>#</th><th>Name</th><th>Roll No</th><th>Batch</th><th>File</th><th>DateTime</th><th>Action</th></tr>
         </thead>
         <tbody>
-          ${rows || "<tr><td colspan='6'>No submissions yet</td></tr>"}
+          ${rows || "<tr><td colspan='7'>No submissions yet</td></tr>"}
         </tbody>
       </table>
 
