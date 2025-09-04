@@ -3,46 +3,113 @@
 <head>
   <meta charset="UTF-8" />
   <title>Code File Upload</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #6a11cb, #2575fc);
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      background: #fff;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
+      animation: fadeIn 0.6s ease-in-out;
+    }
+    h2 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+    label {
+      display: block;
+      text-align: left;
+      font-weight: bold;
+      margin-bottom: 6px;
+      color: #444;
+    }
+    input[type="text"], input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    input[type="text"]:focus, input[type="file"]:focus {
+      border-color: #2575fc;
+      outline: none;
+      box-shadow: 0 0 6px rgba(37,117,252,0.3);
+    }
+    button {
+      background: #2575fc;
+      color: #fff;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      width: 100%;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #1a5bd9;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @media(max-width: 480px) {
+      h2 { font-size: 20px; }
+      button { font-size: 15px; }
+    }
+  </style>
 </head>
 <body>
-  <h2>Code File Upload</h2>
-  <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
-    <label>Name:</label><br />
-    <input type="text" name="name" required /><br /><br />
+  <div class="container">
+    <h2>📂 Code File Upload</h2>
+    <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+      <label>Name:</label>
+      <input type="text" name="name" required />
 
-    <label>Roll No:</label><br />
-    <input type="text" id="rollno" name="rollno" required /><br /><br />
+      <label>Roll No:</label>
+      <input type="text" id="rollno" name="rollno" required />
 
-    <label>Upload Code File:</label><br />
-    <input type="file" name="codefile" required /><br /><br />
+      <label>Upload Code File:</label>
+      <input type="file" name="codefile" required />
 
-    <button type="submit">Submit</button>
-  </form>
+      <button type="submit">🚀 Submit</button>
+    </form>
+  </div>
 
   <script>
     document.getElementById("uploadForm").addEventListener("submit", async function (e) {
       e.preventDefault();
-
       const rollno = document.getElementById("rollno").value.trim();
       if (!rollno) {
         alert("Enter roll number");
         return;
       }
-
       try {
         const res = await fetch(`/check-file?rollno=${encodeURIComponent(rollno)}`);
         const data = await res.json();
-
         if (data.exists) {
           const yes = confirm("⚠️ File already exists for this roll no. Do you want to replace it?");
           if (!yes) {
             alert("❌ Upload cancelled.");
             return;
           }
-          // if yes -> continue to submit (this will overwrite)
         }
-
-        // submit the form normally (will trigger file upload)
         this.submit();
       } catch (err) {
         console.error(err);
