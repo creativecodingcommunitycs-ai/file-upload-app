@@ -28,13 +28,13 @@ function setStatus(val) {
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// serve static files (index.html)
+// serve static files (index.html for students)
 app.use(express.static(__dirname));
 
 // Excel file path
 const EXCEL_FILE = path.join(UPLOAD_DIR, "data.xlsx");
 
-// Multer storage: filename = rollno + original extension
+// Multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
@@ -60,7 +60,8 @@ app.post("/upload", (req, res) => {
     const newEntry = {
       Name: req.body.name || "",
       RollNo: req.body.rollno || "",
-      FileLink: fileLink
+      FileLink: fileLink,
+      Date: new Date().toISOString().split("T")[0] // yyyy-mm-dd
     };
 
     let data = [];
@@ -138,31 +139,110 @@ app.get("/admin/dashboard", (req, res) => {
       <td>${escapeHtml(r.Name)}</td>
       <td>${escapeHtml(r.RollNo)}</td>
       <td><a href="${r.FileLink}" target="_blank">View File</a></td>
-      <td><a href="/admin/delete?rollno=${encodeURIComponent(r.RollNo)}" onclick="return confirm('Delete this submission?')">🗑 Delete</a></td>
+      <td><a class="delete-btn" href="/admin/delete?rollno=${encodeURIComponent(r.RollNo)}" onclick="return confirm('Delete this submission?')">🗑 Delete</a></td>
     </tr>
   `).join("");
 
+  // Chart data (submissions per date)
+  const countByDate = {};
+  submissions.forEach(s => {
+    if (!countByDate[s.Date]) countByDate[s.Date] = 0;
+    countByDate[s.Date]++;
+  });
+  const chartLabels = Object.keys(countByDate);
+  const chartValues = Object.values(countByDate);
+
   res.send(`
-    <h2>📊 Admin Dashboard</h2>
-    <p>Status: <b>${status.acceptingSubmissions ? "✅ OPEN" : "⛔ CLOSED"}</b></p>
-    <p>Total Submissions: <b>${total}</b></p>
-    <form method="post" action="/admin/toggle">
-      <button type="submit">${status.acceptingSubmissions ? "Close Submissions" : "Open Submissions"}</button>
-    </form>
-    <h3>Search by Roll No</h3>
-    <form method="get" action="/admin/search">
-      <input type="text" name="rollno" placeholder="Enter Roll No" required>
-      <button type="submit">Search</button>
-    </form>
-    <h3>Recent Submissions</h3>
-    <table border="1" cellpadding="5">
-      <tr><th>Name</th><th>Roll No</th><th>File</th><th>Action</th></tr>
-      ${rows || "<tr><td colspan='4'>No submissions yet</td></tr>"}
-    </table>
-    <br>
-    <a href="/admin/excel" download>⬇ Download Excel Sheet</a><br><br>
-    <a href="/admin/files" download>⬇ Download All Files (ZIP)</a><br><br>
-    <a href="/">⬅ Back to Upload Page</a>
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: linear-gradient(135deg, #6a11cb, #2575fc);
+        margin: 0; padding: 0;
+        display: flex; justify-content: center; align-items: flex-start;
+        min-height: 100vh;
+      }
+      .container {
+        background: #fff;
+        margin: 30px; padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        width: 95%; max-width: 1000px;
+      }
+      h2, h3 { color: #333; margin-bottom: 15px; }
+      p { font-size: 16px; margin: 8px 0; }
+      button, .btn {
+        background: #2575fc; color: #fff;
+        border: none; padding: 10px 16px; margin: 5px 0;
+        border-radius: 8px; font-size: 15px; font-weight: bold;
+        cursor: pointer; text-decoration: none; display: inline-block;
+      }
+      button:hover, .btn:hover { background: #1a5bd9; }
+      .delete-btn { background: #e74c3c; color: #fff; padding: 6px 10px; border-radius: 6px; text-decoration: none; }
+      .delete-btn:hover { background: #c0392b; }
+      input[type="text"] {
+        padding: 10px; width: 70%; border-radius: 6px;
+        border: 1px solid #ccc; font-size: 14px; margin-bottom: 10px;
+      }
+      table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+      th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+      th { background: #2575fc; color: #fff; }
+      tr:nth-child(even) { background: #f9f9f9; }
+      canvas { margin-top: 20px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>📊 Admin Dashboard</h2>
+      <p>Status: <b>${status.acceptingSubmissions ? "✅ OPEN" : "⛔ CLOSED"}</b></p>
+      <p>Total Submissions: <b>${total}</b></p>
+
+      <form method="post" action="/admin/toggle">
+        <button type="submit">${status.acceptingSubmissions ? "Close Submissions" : "Open Submissions"}</button>
+      </form>
+
+      <h3>🔍 Search by Roll No</h3>
+      <form method="get" action="/admin/search">
+        <input type="text" name="rollno" placeholder="Enter Roll No" required>
+        <button type="submit">Search</button>
+      </form>
+
+      <h3>📂 Recent Submissions</h3>
+      <table>
+        <tr><th>Name</th><th>Roll No</th><th>File</th><th>Action</th></tr>
+        ${rows || "<tr><td colspan='4'>No submissions yet</td></tr>"}
+      </table>
+
+      <canvas id="myChart"></canvas>
+
+      <br>
+      <a class="btn" href="/admin/excel" download>⬇ Download Excel Sheet</a>
+      <a class="btn" href="/admin/files" download>⬇ Download All Files (ZIP)</a>
+      <br><br>
+      <a class="btn" href="/">⬅ Back to Upload Page</a>
+    </div>
+    <script>
+      const ctx = document.getElementById('myChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ${JSON.stringify(chartLabels)},
+          datasets: [{
+            label: 'Submissions per Day',
+            data: ${JSON.stringify(chartValues)},
+            backgroundColor: '#2575fc'
+          }]
+        }
+      });
+    </script>
+  </body>
+  </html>
   `);
 });
 
@@ -249,7 +329,7 @@ app.get("/admin/files", (req, res) => {
 
   archive.pipe(output);
   fs.readdirSync(UPLOAD_DIR).forEach(file => {
-    if (file === "all_files.zip" || file === "status.json" || file === "data.xlsx") return;
+    if (["all_files.zip", "status.json", "data.xlsx"].includes(file)) return;
     const filePath = path.join(UPLOAD_DIR, file);
     if (fs.statSync(filePath).isFile()) archive.file(filePath, { name: file });
   });
