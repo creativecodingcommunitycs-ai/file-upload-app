@@ -24,11 +24,11 @@ function setStatus(val) {
   fs.writeFileSync(STATUS_FILE, JSON.stringify({ acceptingSubmissions: val }));
 }
 
-// parse form bodies (for admin login)
+// parse form bodies
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// serve static files (index.html for students)
+// serve static files (index.html)
 app.use(express.static(__dirname));
 
 // Excel file path
@@ -61,7 +61,7 @@ app.post("/upload", (req, res) => {
       Name: req.body.name || "",
       RollNo: req.body.rollno || "",
       FileLink: fileLink,
-      Date: new Date().toISOString().split("T")[0] // yyyy-mm-dd
+      DateTime: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
     };
 
     let data = [];
@@ -71,6 +71,7 @@ app.post("/upload", (req, res) => {
       if (sheet) data = XLSX.utils.sheet_to_json(sheet);
     }
 
+    // overwrite if same roll exists
     data = data.filter(r => String(r.RollNo) !== String(newEntry.RollNo));
     data.push(newEntry);
 
@@ -83,6 +84,7 @@ app.post("/upload", (req, res) => {
       ✅ File uploaded successfully!<br>
       Name: ${escapeHtml(newEntry.Name)}<br>
       Roll No: ${escapeHtml(newEntry.RollNo)}<br>
+      Submitted At: ${newEntry.DateTime}<br>
       <a href="${fileLink}" download>⬇ Download Your File</a>
     `);
   });
@@ -139,18 +141,19 @@ app.get("/admin/dashboard", (req, res) => {
       <td>${escapeHtml(r.Name)}</td>
       <td>${escapeHtml(r.RollNo)}</td>
       <td><a href="${r.FileLink}" target="_blank">View File</a></td>
+      <td>${escapeHtml(r.DateTime)}</td>
       <td><a class="delete-btn" href="/admin/delete?rollno=${encodeURIComponent(r.RollNo)}" onclick="return confirm('Delete this submission?')">🗑 Delete</a></td>
     </tr>
   `).join("");
 
-  // Chart data (submissions per date)
-  const countByDate = {};
+  // Chart: Submissions by RollNo
+  const countByRoll = {};
   submissions.forEach(s => {
-    if (!countByDate[s.Date]) countByDate[s.Date] = 0;
-    countByDate[s.Date]++;
+    if (!countByRoll[s.RollNo]) countByRoll[s.RollNo] = 0;
+    countByRoll[s.RollNo]++;
   });
-  const chartLabels = Object.keys(countByDate);
-  const chartValues = Object.values(countByDate);
+  const chartLabels = Object.keys(countByRoll);
+  const chartValues = Object.values(countByRoll);
 
   res.send(`
   <!DOCTYPE html>
@@ -161,40 +164,19 @@ app.get("/admin/dashboard", (req, res) => {
     <title>Admin Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        background: linear-gradient(135deg, #6a11cb, #2575fc);
-        margin: 0; padding: 0;
-        display: flex; justify-content: center; align-items: flex-start;
-        min-height: 100vh;
-      }
-      .container {
-        background: #fff;
-        margin: 30px; padding: 25px;
-        border-radius: 12px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-        width: 95%; max-width: 1000px;
-      }
-      h2, h3 { color: #333; margin-bottom: 15px; }
-      p { font-size: 16px; margin: 8px 0; }
-      button, .btn {
-        background: #2575fc; color: #fff;
-        border: none; padding: 10px 16px; margin: 5px 0;
-        border-radius: 8px; font-size: 15px; font-weight: bold;
-        cursor: pointer; text-decoration: none; display: inline-block;
-      }
-      button:hover, .btn:hover { background: #1a5bd9; }
-      .delete-btn { background: #e74c3c; color: #fff; padding: 6px 10px; border-radius: 6px; text-decoration: none; }
-      .delete-btn:hover { background: #c0392b; }
-      input[type="text"] {
-        padding: 10px; width: 70%; border-radius: 6px;
-        border: 1px solid #ccc; font-size: 14px; margin-bottom: 10px;
-      }
-      table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-      th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
-      th { background: #2575fc; color: #fff; }
-      tr:nth-child(even) { background: #f9f9f9; }
-      canvas { margin-top: 20px; }
+      body {font-family: Arial, sans-serif;background: linear-gradient(135deg, #6a11cb, #2575fc);margin:0;padding:0;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;}
+      .container {background:#fff;margin:30px;padding:25px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,0.2);width:95%;max-width:1000px;}
+      h2,h3{color:#333;margin-bottom:15px;} p{font-size:16px;margin:8px 0;}
+      button,.btn{background:#2575fc;color:#fff;border:none;padding:10px 16px;margin:5px 0;border-radius:8px;font-size:15px;font-weight:bold;cursor:pointer;text-decoration:none;display:inline-block;}
+      button:hover,.btn:hover{background:#1a5bd9;}
+      .delete-btn{background:#e74c3c;color:#fff;padding:6px 10px;border-radius:6px;text-decoration:none;}
+      .delete-btn:hover{background:#c0392b;}
+      input[type="text"]{padding:10px;width:70%;border-radius:6px;border:1px solid #ccc;font-size:14px;margin-bottom:10px;}
+      table{width:100%;border-collapse:collapse;margin-top:15px;}
+      th,td{border:1px solid #ddd;padding:10px;text-align:center;}
+      th{background:#2575fc;color:#fff;}
+      tr:nth-child(even){background:#f9f9f9;}
+      canvas{margin-top:20px;}
     </style>
   </head>
   <body>
@@ -215,8 +197,8 @@ app.get("/admin/dashboard", (req, res) => {
 
       <h3>📂 Recent Submissions</h3>
       <table>
-        <tr><th>Name</th><th>Roll No</th><th>File</th><th>Action</th></tr>
-        ${rows || "<tr><td colspan='4'>No submissions yet</td></tr>"}
+        <tr><th>Name</th><th>Roll No</th><th>File</th><th>Date & Time</th><th>Action</th></tr>
+        ${rows || "<tr><td colspan='5'>No submissions yet</td></tr>"}
       </table>
 
       <canvas id="myChart"></canvas>
@@ -234,11 +216,12 @@ app.get("/admin/dashboard", (req, res) => {
         data: {
           labels: ${JSON.stringify(chartLabels)},
           datasets: [{
-            label: 'Submissions per Day',
+            label: 'Submissions by Roll No',
             data: ${JSON.stringify(chartValues)},
-            backgroundColor: '#2575fc'
+            backgroundColor: '#ff6384'
           }]
-        }
+        },
+        options: {scales: {y: {beginAtZero: true}}}
       });
     </script>
   </body>
@@ -273,6 +256,7 @@ app.get("/admin/search", (req, res) => {
       <p><b>Name:</b> ${escapeHtml(record.Name)}</p>
       <p><b>Roll No:</b> ${escapeHtml(record.RollNo)}</p>
       <p><b>File:</b> <a href="${record.FileLink}" target="_blank">View File</a></p>
+      <p><b>Submitted At:</b> ${escapeHtml(record.DateTime)}</p>
       <br><a href="/admin/dashboard">⬅ Back</a>
     `);
   } else {
