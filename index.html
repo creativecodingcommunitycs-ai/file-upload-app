@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Code File Upload</title>
+</head>
+<body>
+  <h2>Code File Upload</h2>
+  <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+    <label>Name:</label><br />
+    <input type="text" name="name" required /><br /><br />
+
+    <label>Roll No:</label><br />
+    <input type="text" id="rollno" name="rollno" required /><br /><br />
+
+    <label>Upload Code File:</label><br />
+    <input type="file" name="codefile" required /><br /><br />
+
+    <button type="submit">Submit</button>
+  </form>
+
+  <script>
+    document.getElementById("uploadForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const rollno = document.getElementById("rollno").value.trim();
+      if (!rollno) {
+        alert("Enter roll number");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/check-file?rollno=${encodeURIComponent(rollno)}`);
+        const data = await res.json();
+
+        if (data.exists) {
+          const yes = confirm("⚠️ File already exists for this roll no. Do you want to replace it?");
+          if (!yes) {
+            alert("❌ Upload cancelled.");
+            return;
+          }
+          // if yes -> continue to submit (this will overwrite)
+        }
+
+        // submit the form normally (will trigger file upload)
+        this.submit();
+      } catch (err) {
+        console.error(err);
+        alert("Error checking duplicate. Try again.");
+      }
+    });
+  </script>
+</body>
+</html>
