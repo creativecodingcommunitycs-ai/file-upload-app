@@ -129,9 +129,8 @@ app.get("/admin/dashboard", (req, res) => {
   }
 
   const total = submissions.length;
-  const recent = submissions.slice(-5).reverse();
 
-  let rows = recent.map(r => `
+  let rows = submissions.map(r => `
     <tr>
       <td>${escapeHtml(r.Name)}</td>
       <td>${escapeHtml(r.RollNo)}</td>
@@ -159,10 +158,11 @@ app.get("/admin/dashboard", (req, res) => {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
       body {font-family: Arial;background: linear-gradient(135deg, #6a11cb, #2575fc);margin:0;padding:0;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;}
-      .container {background:#fff;margin:30px;padding:25px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,0.2);width:95%;max-width:1000px;}
-      table{width:100%;border-collapse:collapse;margin-top:15px;}
+      .container {background:#fff;margin:30px;padding:25px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,0.2);width:95%;max-width:1100px;}
+      table{width:100%;border-collapse:collapse;margin-top:15px;max-height:400px;overflow-y:auto;display:block;}
+      thead, tbody {display:table;width:100%;table-layout:fixed;}
       th,td{border:1px solid #ddd;padding:10px;text-align:center;}
-      th{background:#2575fc;color:#fff;}
+      th{background:#2575fc;color:#fff;position:sticky;top:0;}
       tr:nth-child(even){background:#f9f9f9;}
       button,.btn{background:#2575fc;color:#fff;border:none;padding:8px 14px;margin:5px;border-radius:6px;font-weight:bold;cursor:pointer;text-decoration:none;}
       .btn:hover,button:hover{background:#1a5bd9;}
@@ -177,11 +177,23 @@ app.get("/admin/dashboard", (req, res) => {
       <form method="post" action="/admin/toggle">
         <button type="submit">${status.acceptingSubmissions ? "Close Submissions" : "Open Submissions"}</button>
       </form>
-      <h3>Recent Submissions</h3>
+      
+      <h3>🔍 Search by Roll No</h3>
+      <form method="get" action="/admin/search">
+        <input type="text" name="rollno" placeholder="Enter Roll No" required>
+        <button type="submit">Search</button>
+      </form>
+
+      <h3>📂 All Submissions</h3>
       <table>
-        <tr><th>Name</th><th>Roll No</th><th>Batch</th><th>File</th><th>DateTime</th><th>Action</th></tr>
-        ${rows || "<tr><td colspan='6'>No submissions yet</td></tr>"}
+        <thead>
+          <tr><th>Name</th><th>Roll No</th><th>Batch</th><th>File</th><th>DateTime</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          ${rows || "<tr><td colspan='6'>No submissions yet</td></tr>"}
+        </tbody>
       </table>
+
       <canvas id="batchChart"></canvas>
       <br>
       <a class="btn" href="/admin/excel" download>⬇ Excel</a>
@@ -215,6 +227,32 @@ app.post("/admin/toggle", (req, res) => {
   res.redirect("/admin/dashboard");
 });
 
+// -------------------- Search by roll no --------------------
+app.get("/admin/search", (req, res) => {
+  const rollno = (req.query.rollno || "").trim();
+  if (!rollno) return res.send("❌ Enter roll number.");
+  let submissions = [];
+  if (fs.existsSync(EXCEL_FILE)) {
+    const workbook = XLSX.readFile(EXCEL_FILE);
+    const sheet = workbook.Sheets["Sheet1"];
+    if (sheet) submissions = XLSX.utils.sheet_to_json(sheet);
+  }
+  const record = submissions.find(r => String(r.RollNo) === rollno);
+  if (record) {
+    res.send(`
+      <h2>🔍 Search Result</h2>
+      <p><b>Name:</b> ${escapeHtml(record.Name)}</p>
+      <p><b>Roll No:</b> ${escapeHtml(record.RollNo)}</p>
+      <p><b>Batch:</b> ${escapeHtml(record.Batch)}</p>
+      <p><b>File:</b> <a href="${record.FileLink}" target="_blank">View File</a></p>
+      <p><b>Submitted At:</b> ${escapeHtml(record.DateTime)}</p>
+      <br><a href="/admin/dashboard">⬅ Back</a>
+    `);
+  } else {
+    res.send(`❌ No record for Roll No: ${escapeHtml(rollno)}<br><a href="/admin/dashboard">⬅ Back</a>`);
+  }
+});
+
 // -------------------- Delete submission --------------------
 app.get("/admin/delete", (req, res) => {
   const rollno = (req.query.rollno || "").trim();
@@ -227,10 +265,8 @@ app.get("/admin/delete", (req, res) => {
   }
   const record = submissions.find(r => String(r.RollNo) === rollno);
   if (!record) return res.send("❌ Not found<br><a href='/admin/dashboard'>Back</a>");
-  // delete file
   const filePath = path.join(__dirname, record.FileLink);
   if (fs.existsSync(filePath)) { try { fs.unlinkSync(filePath); } catch {} }
-  // remove from excel
   submissions = submissions.filter(r => String(r.RollNo) !== rollno);
   const worksheet = XLSX.utils.json_to_sheet(submissions);
   const workbook = XLSX.utils.book_new();
